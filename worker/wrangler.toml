@@ -1,0 +1,8 @@
+name = "otareki-worker"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+[vars]
+SPOTIFY_CLIENT_ID = ""
+SPOTIFY_CLIENT_SECRET = ""
+
