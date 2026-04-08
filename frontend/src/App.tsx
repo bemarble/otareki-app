@@ -1,4 +1,11 @@
-import { Link, Route, Routes, useNavigate, useParams } from 'react-router-dom'
+import {
+  Link,
+  Route,
+  Routes,
+  useNavigate,
+  useParams,
+  useSearchParams,
+} from 'react-router-dom'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import './App.css'
 import {
@@ -12,6 +19,13 @@ type ArtistResult = {
   id: string
   name: string
   image: string
+}
+
+type TopTrack = {
+  id: string
+  name: string
+  image: string
+  url: string
 }
 
 const MAX_ARTISTS = 10
@@ -81,6 +95,7 @@ function HomePage() {
 }
 
 function CreatePage() {
+  const [searchParams] = useSearchParams()
   const [query, setQuery] = useState('')
   const [isSearching, setIsSearching] = useState(false)
   const [searchResults, setSearchResults] = useState<ArtistResult[]>([])
@@ -89,6 +104,18 @@ function CreatePage() {
   const navigate = useNavigate()
 
   const canAddMore = timeline.length < MAX_ARTISTS
+
+  useEffect(() => {
+    // /create?data=xxx で遷移してきた場合、URL のデータからフォームを復元する
+    const encoded = searchParams.get('data')
+    if (!encoded) return
+    if (timeline.length > 0) return
+
+    const restored = decodeTimeline(encoded)
+    if (restored.length > 0) {
+      setTimeline(restored)
+    }
+  }, [searchParams, timeline.length])
 
   async function handleSearch() {
     if (!query.trim()) return
@@ -334,6 +361,7 @@ function TimelinePage() {
   const [isCapturing, setIsCapturing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const timelineRef = useRef<HTMLDivElement | null>(null)
+  const navigate = useNavigate()
 
   useEffect(() => {
     if (!data) return
@@ -359,9 +387,10 @@ function TimelinePage() {
   }
 
   const sorted = [...entries].sort((a, b) => {
+    // 開始年の昇順（古い年が上）でソート
     const ay = Number(a.startYear) || 0
     const by = Number(b.startYear) || 0
-    return by - ay
+    return ay - by
   })
 
   async function handleDownloadImage() {
@@ -389,13 +418,26 @@ function TimelinePage() {
     }
   }
 
+  function handleBackToEdit() {
+    if (!data) {
+      navigate('/create')
+      return
+    }
+    navigate(`/create?data=${data}`)
+  }
+
   return (
     <Layout>
       <section className="timeline-view" ref={timelineRef}>
         <h1 className="timeline-view-title">オタレキ</h1>
         <ul className="timeline-view-list">
           {sorted.map((item) => (
-            <li key={item.id} className="timeline-view-item">
+            <li
+              key={item.id}
+              className={`timeline-view-item ${
+                !item.endYear ? 'timeline-view-item-current' : ''
+              }`}
+            >
               <div className="timeline-view-year">
                 {item.startYear}
                 {item.endYear && `–${item.endYear}`}
@@ -408,7 +450,13 @@ function TimelinePage() {
                     className="timeline-view-image"
                   />
                 )}
-                <div className="timeline-view-artist">{item.name}</div>
+                <Link
+                  className="timeline-view-artist"
+                  to={`/artist/${encodeURIComponent(item.name)}`}
+                  state={{ name: item.name }}
+                >
+                  {item.name}
+                </Link>
               </div>
             </li>
           ))}
@@ -423,11 +471,89 @@ function TimelinePage() {
         >
           {isCapturing ? '画像生成中…' : '画像を保存する（1080x1350）'}
         </button>
-        <Link to="/create" className="ghost-button">
-          自分のオタレキを作る
-        </Link>
+        <button
+          type="button"
+          className="ghost-button"
+          onClick={handleBackToEdit}
+        >
+          編集画面に戻る
+        </button>
       </div>
       {error && <p className="error-text">{error}</p>}
+    </Layout>
+  )
+}
+
+function ArtistTopTracksPage() {
+  const { name } = useParams<{ name: string }>()
+  const decodedName = name ? decodeURIComponent(name) : ''
+  const [tracks, setTracks] = useState<TopTrack[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!decodedName) return
+    ;(async () => {
+      setLoading(true)
+      setError(null)
+      try {
+        const params = new URLSearchParams({ q: decodedName })
+        const res = await fetch(`/api/artist-top?${params.toString()}`)
+        if (!res.ok) {
+          throw new Error('代表曲の取得に失敗しました')
+        }
+        const data = (await res.json()) as TopTrack[]
+        setTracks(data)
+      } catch (e) {
+        setError(
+          e instanceof Error ? e.message : '代表曲の取得中にエラーが発生しました',
+        )
+      } finally {
+        setLoading(false)
+      }
+    })().catch(() => {})
+  }, [decodedName])
+
+  return (
+    <Layout>
+      <section className="timeline-view">
+        <h1 className="timeline-view-title">
+          {decodedName ? `${decodedName} の代表曲` : '代表曲'}
+        </h1>
+        {loading && <p className="muted-text">読み込み中です…</p>}
+        {error && <p className="error-text">{error}</p>}
+        {!loading && !error && tracks.length === 0 && (
+          <p className="muted-text">代表曲が見つかりませんでした。</p>
+        )}
+        {!loading && !error && tracks.length > 0 && (
+          <ul className="top-tracks-list">
+            {tracks.map((track) => (
+              <li key={track.id} className="top-tracks-item">
+                <div className="top-tracks-content">
+                  {track.image && (
+                    <img
+                      src={`https://i.scdn.co/image/${track.image}`}
+                      alt={track.name}
+                      className="top-tracks-image"
+                    />
+                  )}
+                  <div className="top-tracks-meta">
+                    <div className="top-tracks-name">{track.name}</div>
+                    <a
+                      href={track.url}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="secondary-button top-tracks-link"
+                    >
+                      Spotifyで再生
+                    </a>
+                  </div>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
     </Layout>
   )
 }
@@ -438,6 +564,7 @@ function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/create" element={<CreatePage />} />
       <Route path="/t/:data" element={<TimelinePage />} />
+      <Route path="/artist/:name" element={<ArtistTopTracksPage />} />
     </Routes>
   )
 }

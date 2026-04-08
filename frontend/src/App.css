@@ -435,6 +435,11 @@
   padding: 0;
   margin: 0;
   position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 320px;
+  justify-content: space-evenly;
 }
 
 .timeline-view-list::before {
@@ -461,7 +466,7 @@
   width: 9px;
   height: 9px;
   border-radius: 999px;
-  background: var(--accent);
+  background: #9ca3af;
   position: absolute;
   left: 84px;
   top: 50%;
@@ -489,9 +494,67 @@
 
 .timeline-view-artist {
   font-size: 15px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-h);
+  text-decoration: none;
 }
 
 .timeline-view-actions {
   margin-top: 18px;
   text-align: center;
+}
+
+.timeline-view-item-current::before {
+  background: var(--accent);
+}
+
+/* Artist top tracks page */
+
+.top-tracks-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.top-tracks-item {
+  border-radius: 12px;
+  border: 1px solid var(--border);
+  padding: 8px 10px;
+}
+
+.top-tracks-content {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.top-tracks-image {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+
+.top-tracks-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex: 1;
+}
+
+.top-tracks-name {
+  font-size: 14px;
+  font-weight: 500;
+  text-align: left;
+}
+
+.top-tracks-link {
+  font-size: 12px;
+  padding-inline: 10px;
 }

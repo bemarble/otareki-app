@@ -30,11 +30,30 @@ External Spotify API
 
 Spotify APIは
 
-検索のみ使用
+1. アーティスト検索  
+2. アーティストの代表曲取得  
 
-/v1/search
+のみ使用
 
-type=artist limit=5
+- /v1/search  
+  - type=artist limit=5
+- /v1/artists/{id}/top-tracks  
+  - market=JP limit=10
+
+代表曲ページでは
+
+- Cloudflare Worker 経由で /v1/artists/{id}/top-tracks を呼び出し
+- 返却された上位10曲について
+  - 楽曲画像
+  - 曲名
+  - Spotify再生リンク（open.spotify.com のURL）
+
+のみ表示すること。
+
+代表曲ページは
+
+- タイムライン結果ページからアーティスト名リンクをクリックしたとき
+- 「/artist/:id」 のようなルートで表示する。
 
 ------------------------------------------------------------------------
 
