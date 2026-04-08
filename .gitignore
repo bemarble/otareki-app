@@ -8,4 +8,4 @@ dist
 worker/.dev.vars
 worker/.env
 worker/.env.*
-
+worker/.wrangler/*

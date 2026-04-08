@@ -5,7 +5,9 @@ import {
   type Env,
   type SearchResult,
   type SpotifySearchResponse,
+  type SpotifyTopTracksResponse,
   type SpotifyTokenResponse,
+  type TopTrackResult,
 } from './types'
 
 // Spotify トークン / 検索結果のキャッシュ用キー・TTL
@@ -27,6 +29,10 @@ export default {
     const url = new URL(request.url)
     if (url.pathname === '/api/search') {
       return handleSearch(request, env, ctx)
+    }
+
+    if (url.pathname === '/api/artist-top') {
+      return handleArtistTop(request, env, ctx)
     }
 
     return new Response('Not found', { status: 404 })
@@ -76,8 +82,6 @@ async function handleSearch(
     return new Response('Spotify search failed', { status: 502 })
   }
 
-  console.log('res', await res.json())
-
   const data = (await res.json()) as SpotifySearchResponse
   const items = data.artists?.items ?? []
 
@@ -88,6 +92,97 @@ async function handleSearch(
   }))
 
   // 検索結果 JSON を返却（ブラウザ / Worker 両方で 60 秒キャッシュ）
+  const response = jsonResponse(body, {
+    'Cache-Control': `public, max-age=${SEARCH_TTL_SECONDS}`,
+  })
+
+  ctx.waitUntil(cache.put(cacheUrl.toString(), response.clone()))
+
+  return response
+}
+
+// アーティスト名から代表曲（Top Tracks）を取得する
+async function handleArtistTop(
+  request: Request,
+  env: Env,
+  ctx: ExecutionContext,
+): Promise<Response> {
+  const url = new URL(request.url)
+  const q = url.searchParams.get('q')?.trim()
+  if (!q) {
+    return jsonResponse([], {
+      'Cache-Control': 'public, max-age=60',
+    })
+  }
+
+  // クエリを小文字に正規化した URL をキャッシュキーにする
+  const cacheUrl = new URL(request.url)
+  cacheUrl.searchParams.set('q', q.toLowerCase())
+  const cache = getDefaultCache()
+
+  const cached = await cache.match(cacheUrl.toString())
+  if (cached) {
+    return cached
+  }
+
+  const token = await getSpotifyToken(env)
+
+  // 1. アーティスト名からIDを取得（/v1/search）
+  const searchUrl = new URL('https://api.spotify.com/v1/search')
+  searchUrl.searchParams.set('q', q)
+  searchUrl.searchParams.set('type', 'artist')
+  searchUrl.searchParams.set('limit', '1')
+
+  const searchRes = await fetch(searchUrl.toString(), {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  if (!searchRes.ok) {
+    console.error('Spotify artist search error', searchRes.status, await searchRes.text())
+    return new Response('Spotify artist search failed', { status: 502 })
+  }
+
+  const searchData = (await searchRes.json()) as SpotifySearchResponse
+  const artist = searchData.artists?.items?.[0]
+  if (!artist) {
+    // アーティストが見つからない場合は空配列を返す
+    return jsonResponse([], {
+      'Cache-Control': 'public, max-age=60',
+    })
+  }
+
+  // 2. アーティストIDからTop Tracksを取得（/v1/artists/{id}/top-tracks）
+  const topUrl = new URL(
+    `https://api.spotify.com/v1/artists/${encodeURIComponent(artist.id)}/top-tracks`,
+  )
+  topUrl.searchParams.set('market', 'JP')
+  topUrl.searchParams.set('limit', '10')
+
+  const topRes = await fetch(topUrl.toString(), {
+    headers: {
+      Authorization: `Bearer ${token}`,
+    },
+  })
+
+  if (!topRes.ok) {
+    console.error('Spotify top tracks error', topRes.status, topUrl.pathname, await topRes.text())
+    return new Response('Spotify top tracks failed', { status: 502 })
+  }
+
+  const topData = (await topRes.json()) as SpotifyTopTracksResponse
+  const tracks = topData.tracks ?? []
+
+  const body: TopTrackResult[] = tracks.map((track) => ({
+    id: track.id,
+    name: track.name,
+    image: extractImageHash(track.album.images?.[0]?.url ?? ''),
+    url:
+      track.external_urls?.spotify ??
+      `https://open.spotify.com/track/${encodeURIComponent(track.id)}`,
+  }))
+
   const response = jsonResponse(body, {
     'Cache-Control': `public, max-age=${SEARCH_TTL_SECONDS}`,
   })
