@@ -2,6 +2,7 @@ import {
   Link,
   Route,
   Routes,
+  useLocation,
   useNavigate,
   useParams,
   useSearchParams,
@@ -648,7 +649,8 @@ function TimelinePage() {
                     )}
                     <Link
                       className="bar-chart-artist-name"
-                      to={`/artist/${encodeURIComponent(item.name)}`}
+                      to={`/artist/${encodeURIComponent(item.id)}`}
+                      state={{ name: item.name }}
                     >
                       {item.name}
                     </Link>
@@ -702,20 +704,21 @@ function TimelinePage() {
 }
 
 function ArtistTopTracksPage() {
-  const { name } = useParams<{ name: string }>()
-  const artistName = name ? decodeURIComponent(name) : ''
+  const { id } = useParams<{ id: string }>()
+  const location = useLocation()
+  const artistName = (location.state as { name?: string } | null)?.name ?? ''
   const [albums, setAlbums] = useState<Album[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!artistName) return
+    if (!id) return
     const controller = new AbortController()
     setLoading(true)
     setError(null)
     ;(async () => {
       try {
-        const params = new URLSearchParams({ q: artistName })
+        const params = new URLSearchParams({ id })
         const res = await fetch(`/api/artist-top?${params.toString()}`, {
           signal: controller.signal,
         })
@@ -734,7 +737,7 @@ function ArtistTopTracksPage() {
       }
     })().catch(() => {})
     return () => controller.abort()
-  }, [artistName])
+  }, [id])
 
   return (
     <Layout>
@@ -791,7 +794,7 @@ function App() {
       <Route path="/" element={<HomePage />} />
       <Route path="/create" element={<CreatePage />} />
       <Route path="/t/:data" element={<TimelinePage />} />
-      <Route path="/artist/:name" element={<ArtistTopTracksPage />} />
+      <Route path="/artist/:id" element={<ArtistTopTracksPage />} />
     </Routes>
   )
 }

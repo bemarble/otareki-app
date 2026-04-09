@@ -123,22 +123,21 @@ async function handleSearch(
   return response
 }
 
-// アーティスト名 → /v1/search で artist.id を取得 → /v1/artists/{id}/albums でアルバム一覧を返す
+// artist.id を受け取り /v1/artists/{id}/albums でアルバム一覧を返す
 async function handleArtistTop(
   request: Request,
   env: Env,
   ctx: ExecutionContext,
 ): Promise<Response> {
   const url = new URL(request.url)
-  const q = url.searchParams.get('q')?.trim()
-  if (!q) {
+  const artistId = url.searchParams.get('id')?.trim()
+  if (!artistId) {
     return jsonResponse([], {
       'Cache-Control': 'public, max-age=60',
     })
   }
 
-  // クエリを小文字に正規化した文字列をキャッシュキーにする
-  const cacheKey = `https://artist-albums-cache/${q.toLowerCase()}`
+  const cacheKey = `https://artist-albums-cache/${artistId}`
   const cache = getDefaultCache()
 
   const cached = await cache.match(cacheKey)
@@ -148,31 +147,9 @@ async function handleArtistTop(
 
   const token = await getSpotifyToken(env)
 
-  // 1. /v1/search でアーティスト名から artist.id を取得
-  const searchUrl = new URL('https://api.spotify.com/v1/search')
-  searchUrl.searchParams.set('q', q)
-  searchUrl.searchParams.set('type', 'artist')
-  searchUrl.searchParams.set('limit', '1')
-  searchUrl.searchParams.set('market', 'JP')
-
-  const searchRes = await fetch(searchUrl.toString(), {
-    headers: { Authorization: `Bearer ${token}` },
-  })
-
-  if (!searchRes.ok) {
-    console.error('Spotify search error', searchRes.status, await searchRes.text())
-    return new Response('Spotify search failed', { status: 502 })
-  }
-
-  const searchData = (await searchRes.json()) as SpotifySearchResponse
-  const artist = searchData.artists?.items?.[0]
-  if (!artist) {
-    return jsonResponse([], { 'Cache-Control': 'public, max-age=60' })
-  }
-
-  // 2. /v1/artists/{id}/albums でアルバム一覧を取得
+  // /v1/artists/{id}/albums でアルバム一覧を取得
   const albumsUrl = new URL(
-    `https://api.spotify.com/v1/artists/${encodeURIComponent(artist.id)}/albums`,
+    `https://api.spotify.com/v1/artists/${encodeURIComponent(artistId)}/albums`,
   )
   albumsUrl.searchParams.set('include_groups', 'album,single')
   albumsUrl.searchParams.set('market', 'JP')
