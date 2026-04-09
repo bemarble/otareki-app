@@ -29,6 +29,21 @@ type TopTrack = {
 }
 
 const MAX_ARTISTS = 10
+const CURRENT_YEAR = new Date().getFullYear()
+const YEAR_MIN = 1990
+
+const BAR_COLORS = [
+  '#aa3bff',
+  '#3b82f6',
+  '#10b981',
+  '#f59e0b',
+  '#ef4444',
+  '#8b5cf6',
+  '#06b6d4',
+  '#ec4899',
+  '#84cc16',
+  '#f97316',
+]
 
 function Layout({ children }: { children: React.ReactNode }) {
   return (
@@ -101,19 +116,20 @@ function CreatePage() {
   const [searchResults, setSearchResults] = useState<ArtistResult[]>([])
   const [error, setError] = useState<string | null>(null)
   const [timeline, setTimeline] = useState<TimelineEntry[]>([])
+  const [username, setUsername] = useState('')
   const navigate = useNavigate()
 
   const canAddMore = timeline.length < MAX_ARTISTS
 
   useEffect(() => {
-    // /create?data=xxx で遷移してきた場合、URL のデータからフォームを復元する
     const encoded = searchParams.get('data')
     if (!encoded) return
     if (timeline.length > 0) return
 
     const restored = decodeTimeline(encoded)
-    if (restored.length > 0) {
-      setTimeline(restored)
+    if (restored.entries.length > 0) {
+      setTimeline(restored.entries)
+      setUsername(restored.username)
     }
   }, [searchParams, timeline.length])
 
@@ -124,15 +140,11 @@ function CreatePage() {
     try {
       const params = new URLSearchParams({ q: query.trim() })
       const res = await fetch(`/api/search?${params.toString()}`)
-      if (!res.ok) {
-        throw new Error('検索に失敗しました')
-      }
+      if (!res.ok) throw new Error('検索に失敗しました')
       const data = (await res.json()) as ArtistResult[]
       setSearchResults(data)
     } catch (e) {
-      setError(
-        e instanceof Error ? e.message : '検索中にエラーが発生しました',
-      )
+      setError(e instanceof Error ? e.message : '検索中にエラーが発生しました')
     } finally {
       setIsSearching(false)
     }
@@ -147,21 +159,34 @@ function CreatePage() {
         id: artist.id,
         name: artist.name,
         imageHash: artist.image,
-        startYear: '',
+        startYear: String(CURRENT_YEAR),
         endYear: '',
       },
     ])
   }
 
-  function updateYear(
-    id: string,
-    field: 'startYear' | 'endYear',
-    value: string,
-  ) {
-    const sanitized = value.replace(/[^0-9]/g, '').slice(0, 4)
+  function updateYear(id: string, field: 'startYear' | 'endYear', value: string) {
+    setTimeline((prev) =>
+      prev.map((item) => {
+        if (item.id !== id) return item
+        const updated = { ...item, [field]: value }
+        // 開始年 > 終了年になった場合は終了年を開始年に合わせる
+        if (
+          field === 'startYear' &&
+          updated.endYear &&
+          Number(value) > Number(updated.endYear)
+        ) {
+          updated.endYear = value
+        }
+        return updated
+      }),
+    )
+  }
+
+  function toggleActive(id: string, isActive: boolean) {
     setTimeline((prev) =>
       prev.map((item) =>
-        item.id === id ? { ...item, [field]: sanitized } : item,
+        item.id === id ? { ...item, endYear: isActive ? String(CURRENT_YEAR) : '' } : item,
       ),
     )
   }
@@ -171,8 +196,8 @@ function CreatePage() {
   }
 
   const encoded = useMemo(
-    () => (timeline.length ? encodeTimeline(timeline) : ''),
-    [timeline],
+    () => (timeline.length ? encodeTimeline({ username, entries: timeline }) : ''),
+    [timeline, username],
   )
 
   function handleOpenTimeline() {
@@ -238,20 +263,16 @@ function CreatePage() {
               </button>
             ))}
             {!searchResults.length && (
-              <p className="muted-text">
-                検索すると、ここに候補が表示されます。
-              </p>
+              <p className="muted-text">検索すると、ここに候補が表示されます。</p>
             )}
           </div>
-          <p className="muted-text">
-            最大 {MAX_ARTISTS} アーティストまで追加できます。
-          </p>
+          <p className="muted-text">最大 {MAX_ARTISTS} アーティストまで追加できます。</p>
         </div>
 
         <div className="panel">
           <h2>2. タイムライン編集</h2>
           <p className="panel-description">
-            各アーティストの推し始め・推し終わりの年を入力して、推し遍歴を作ります。
+            各アーティストの推し始め・推し終わりの年をスライダーで設定します。
           </p>
           {timeline.length === 0 ? (
             <p className="muted-text">
@@ -259,55 +280,80 @@ function CreatePage() {
             </p>
           ) : (
             <ul className="timeline-edit-list">
-              {timeline.map((item) => (
-                <li key={item.id} className="timeline-edit-item">
-                  <div className="timeline-edit-main">
-                    <div className="timeline-edit-meta">
-                      {item.imageHash && (
-                        <img
-                          src={`https://i.scdn.co/image/${item.imageHash}`}
-                          alt={item.name}
-                          className="timeline-thumb"
-                        />
+              {timeline.map((item) => {
+                const isActive = !item.endYear
+                const startVal = Number(item.startYear) || CURRENT_YEAR
+                const endVal = Number(item.endYear) || CURRENT_YEAR
+                const endMin = Math.max(startVal, YEAR_MIN)
+
+                return (
+                  <li key={item.id} className="timeline-edit-item">
+                    <div className="timeline-edit-header">
+                      <div className="timeline-edit-meta">
+                        {item.imageHash && (
+                          <img
+                            src={`https://i.scdn.co/image/${item.imageHash}`}
+                            alt={item.name}
+                            className="timeline-thumb"
+                          />
+                        )}
+                        <span className="timeline-artist">{item.name}</span>
+                      </div>
+                      <button
+                        type="button"
+                        className="ghost-button ghost-button-sm"
+                        onClick={() => handleRemove(item.id)}
+                      >
+                        削除
+                      </button>
+                    </div>
+                    <div className="year-slider-row">
+                      <span className="year-slider-label">開始</span>
+                      <span className="year-slider-value">{startVal}</span>
+                      <input
+                        type="range"
+                        className="year-slider"
+                        min={YEAR_MIN}
+                        max={CURRENT_YEAR}
+                        value={startVal}
+                        onChange={(e) => updateYear(item.id, 'startYear', e.target.value)}
+                      />
+                    </div>
+                    <div className="year-slider-row">
+                      <span className="year-slider-label">終了</span>
+                      {isActive ? (
+                        <button
+                          type="button"
+                          className="active-badge"
+                          onClick={() => toggleActive(item.id, true)}
+                          title="クリックして終了年を設定"
+                        >
+                          現在も推し中
+                        </button>
+                      ) : (
+                        <>
+                          <span className="year-slider-value">{endVal}</span>
+                          <input
+                            type="range"
+                            className="year-slider"
+                            min={endMin}
+                            max={CURRENT_YEAR}
+                            value={endVal}
+                            onChange={(e) => updateYear(item.id, 'endYear', e.target.value)}
+                          />
+                          <button
+                            type="button"
+                            className="ghost-button ghost-button-sm"
+                            onClick={() => toggleActive(item.id, false)}
+                          >
+                            現在も
+                          </button>
+                        </>
                       )}
-                      <span className="timeline-artist">{item.name}</span>
                     </div>
-                    <div className="timeline-years">
-                      <label className="year-field">
-                        <span>開始年</span>
-                        <input
-                          className="year-input"
-                          inputMode="numeric"
-                          placeholder="2021"
-                          value={item.startYear}
-                          onChange={(e) =>
-                            updateYear(item.id, 'startYear', e.target.value)
-                          }
-                        />
-                      </label>
-                      <label className="year-field">
-                        <span>終了年（任意）</span>
-                        <input
-                          className="year-input"
-                          inputMode="numeric"
-                          placeholder="2024"
-                          value={item.endYear}
-                          onChange={(e) =>
-                            updateYear(item.id, 'endYear', e.target.value)
-                          }
-                        />
-                      </label>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    className="ghost-button"
-                    onClick={() => handleRemove(item.id)}
-                  >
-                    削除
-                  </button>
-                </li>
-              ))}
+                  </li>
+                )
+              })}
             </ul>
           )}
         </div>
@@ -315,7 +361,20 @@ function CreatePage() {
         <div className="panel">
           <h2>3. URL生成 & 共有</h2>
           <p className="panel-description">
-            タイムラインを URL に保存して、X やInstagramなどに貼り付けできます。
+            タイムラインを URL に保存して、SNS に貼り付けできます。
+          </p>
+          <label className="username-field">
+            <span className="username-label">ユーザー名（任意）</span>
+            <input
+              className="text-input"
+              placeholder="例: みなみ"
+              value={username}
+              maxLength={30}
+              onChange={(e) => setUsername(e.target.value)}
+            />
+          </label>
+          <p className="muted-text">
+            タイムラインに「{username || 'ユーザー名'}のオタレキ」と表示されます。
           </p>
           <div className="url-row">
             <input
@@ -343,12 +402,6 @@ function CreatePage() {
               タイムラインを開く
             </button>
           </div>
-          <p className="muted-text">
-            例:{' '}
-            {encoded
-              ? `私のオタレキ作りました ${shareUrl} #オタレキ`
-              : '私のオタレキ作りました https://example.com/t/xxxx #オタレキ'}
-          </p>
         </div>
       </section>
     </Layout>
@@ -358,6 +411,7 @@ function CreatePage() {
 function TimelinePage() {
   const { data } = useParams<{ data: string }>()
   const [entries, setEntries] = useState<TimelineEntry[]>([])
+  const [username, setUsername] = useState('')
   const [isCapturing, setIsCapturing] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const timelineRef = useRef<HTMLDivElement | null>(null)
@@ -365,7 +419,9 @@ function TimelinePage() {
 
   useEffect(() => {
     if (!data) return
-    setEntries(decodeTimeline(data))
+    const decoded = decodeTimeline(data)
+    setEntries(decoded.entries)
+    setUsername(decoded.username)
   }, [data])
 
   if (!data) {
@@ -387,11 +443,22 @@ function TimelinePage() {
   }
 
   const sorted = [...entries].sort((a, b) => {
-    // 開始年の昇順（古い年が上）でソート
     const ay = Number(a.startYear) || 0
     const by = Number(b.startYear) || 0
     return ay - by
   })
+
+  const validStarts = sorted.map(e => Number(e.startYear)).filter(y => y > 1900)
+  const validEnds = sorted.map(e => Number(e.endYear)).filter(y => y > 1900)
+  const minYear = validStarts.length ? Math.min(...validStarts) : CURRENT_YEAR - 5
+  const maxYear = Math.max(CURRENT_YEAR, ...(validEnds.length ? validEnds : [CURRENT_YEAR]))
+  const totalSpan = maxYear - minYear || 1
+
+  const yearStep = totalSpan <= 10 ? 1 : totalSpan <= 20 ? 2 : 5
+  const yearMarkers = Array.from(
+    { length: Math.floor(totalSpan / yearStep) + 1 },
+    (_, i) => minYear + i * yearStep,
+  )
 
   async function handleDownloadImage() {
     if (!timelineRef.current) return
@@ -429,38 +496,68 @@ function TimelinePage() {
   return (
     <Layout>
       <section className="timeline-view" ref={timelineRef}>
-        <h1 className="timeline-view-title">オタレキ</h1>
-        <ul className="timeline-view-list">
-          {sorted.map((item) => (
-            <li
-              key={item.id}
-              className={`timeline-view-item ${
-                !item.endYear ? 'timeline-view-item-current' : ''
-              }`}
-            >
-              <div className="timeline-view-year">
-                {item.startYear}
-                {item.endYear && `–${item.endYear}`}
-              </div>
-              <div className="timeline-view-content">
-                {item.imageHash && (
-                  <img
-                    src={`https://i.scdn.co/image/${item.imageHash}`}
-                    alt={item.name}
-                    className="timeline-view-image"
-                  />
-                )}
-                <Link
-                  className="timeline-view-artist"
-                  to={`/artist/${encodeURIComponent(item.name)}`}
-                  state={{ name: item.name }}
+        <h1 className="timeline-view-title">
+          {username ? `${username}のオタレキ` : 'オタレキ'}
+        </h1>
+        <div className="bar-chart">
+          <div className="bar-chart-header">
+            <div className="bar-chart-label-col" />
+            <div className="bar-chart-axis">
+              {yearMarkers.map((year) => (
+                <div
+                  key={year}
+                  className="bar-chart-year-mark"
+                  style={{ left: `${((year - minYear) / totalSpan) * 100}%` }}
                 >
-                  {item.name}
-                </Link>
-              </div>
-            </li>
-          ))}
-        </ul>
+                  {year}
+                </div>
+              ))}
+            </div>
+          </div>
+          <div className="bar-chart-rows">
+            {sorted.map((item, index) => {
+              const start = Number(item.startYear) || minYear
+              const end = Number(item.endYear) || maxYear
+              const isActive = !item.endYear
+              const leftPct = ((start - minYear) / totalSpan) * 100
+              const widthPct = Math.max(((end - start) / totalSpan) * 100, 2)
+              const color = BAR_COLORS[index % BAR_COLORS.length]
+              const label = isActive ? `${start}〜現在` : `${start}〜${end}`
+
+              return (
+                <div key={item.id} className="bar-chart-row">
+                  <div className="bar-chart-label-col">
+                    {item.imageHash && (
+                      <img
+                        src={`https://i.scdn.co/image/${item.imageHash}`}
+                        alt={item.name}
+                        className="bar-chart-artist-image"
+                      />
+                    )}
+                    <Link
+                      className="bar-chart-artist-name"
+                      to={`/artist/${encodeURIComponent(item.name)}`}
+                      state={{ name: item.name }}
+                    >
+                      {item.name}
+                    </Link>
+                  </div>
+                  <div className="bar-chart-track">
+                    <div
+                      className={`bar-chart-bar${isActive ? ' bar-chart-bar-active' : ''}`}
+                      style={{
+                        left: `${leftPct}%`,
+                        width: `${widthPct}%`,
+                        background: color,
+                      }}
+                      title={label}
+                    />
+                  </div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
       </section>
       <div className="timeline-view-actions">
         <button

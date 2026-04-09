@@ -326,60 +326,134 @@
   margin: 4px 0 0;
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 10px;
 }
 
 .timeline-edit-item {
   border-radius: 12px;
   border: 1px solid var(--border);
-  padding: 8px 10px;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.timeline-edit-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
   gap: 8px;
 }
 
-.timeline-edit-main {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  min-width: 0;
-}
-
 .timeline-edit-meta {
   display: flex;
   align-items: center;
   gap: 8px;
+  min-width: 0;
 }
 
 .timeline-thumb {
-  width: 32px;
-  height: 32px;
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
   object-fit: cover;
+  flex-shrink: 0;
 }
 
 .timeline-artist {
   font-size: 14px;
   font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
-.timeline-years {
+/* Year slider */
+
+.year-slider-row {
   display: flex;
-  flex-wrap: wrap;
+  align-items: center;
   gap: 8px;
 }
 
-.year-field {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
+.year-slider-label {
+  font-size: 11px;
   color: var(--text);
+  width: 24px;
+  flex-shrink: 0;
 }
 
-.year-field span {
-  font-size: 11px;
+.year-slider-value {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-h);
+  width: 36px;
+  text-align: center;
+  flex-shrink: 0;
+}
+
+.year-slider {
+  flex: 1;
+  -webkit-appearance: none;
+  appearance: none;
+  height: 4px;
+  border-radius: 999px;
+  background: var(--border);
+  outline: none;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.year-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.year-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: var(--accent);
+  cursor: pointer;
+  border: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+}
+
+.active-badge {
+  font: inherit;
+  font-size: 12px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  padding: 3px 10px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.ghost-button-sm {
+  font-size: 12px;
+  padding: 3px 10px;
+}
+
+/* Username field */
+
+.username-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.username-label {
+  font-size: 13px;
+  color: var(--text);
+  font-weight: 500;
 }
 
 .url-row {
@@ -415,90 +489,21 @@
 /* Timeline view page */
 
 .timeline-view {
-  max-width: 520px;
+  max-width: 860px;
   margin: 0 auto;
-  padding: 16px 12px 24px;
+  padding: 20px 20px 28px;
   border-radius: 18px;
   border: 1px solid var(--border);
   background: var(--bg);
   box-shadow: var(--shadow);
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .timeline-view-title {
-  font-size: 24px;
+  font-size: 22px;
   text-align: center;
-  margin-bottom: 18px;
-}
-
-.timeline-view-list {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  position: relative;
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  min-height: 320px;
-  justify-content: space-evenly;
-}
-
-.timeline-view-list::before {
-  content: '';
-  position: absolute;
-  left: 88px;
-  top: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--border);
-}
-
-.timeline-view-item {
-  display: grid;
-  grid-template-columns: 80px minmax(0, 1fr);
-  gap: 12px;
-  align-items: center;
-  position: relative;
-  padding-block: 6px;
-}
-
-.timeline-view-item::before {
-  content: '';
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-  background: #9ca3af;
-  position: absolute;
-  left: 84px;
-  top: 50%;
-  transform: translate(-50%, -50%);
-}
-
-.timeline-view-year {
-  text-align: right;
-  font-weight: 600;
-  font-size: 14px;
-}
-
-.timeline-view-content {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.timeline-view-image {
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
-  object-fit: cover;
-}
-
-.timeline-view-artist {
-  font-size: 15px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: var(--text-h);
-  text-decoration: none;
+  margin-bottom: 20px;
 }
 
 .timeline-view-actions {
@@ -506,8 +511,113 @@
   text-align: center;
 }
 
-.timeline-view-item-current::before {
-  background: var(--accent);
+/* Bar chart */
+
+.bar-chart {
+  width: 100%;
+  text-align: left;
+}
+
+.bar-chart-header {
+  display: flex;
+  align-items: flex-end;
+  margin-bottom: 6px;
+}
+
+.bar-chart-label-col {
+  width: 160px;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding-right: 14px;
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.bar-chart-axis {
+  flex: 1;
+  position: relative;
+  height: 18px;
+}
+
+.bar-chart-year-mark {
+  position: absolute;
+  bottom: 0;
+  transform: translateX(-50%);
+  font-size: 11px;
+  color: var(--text);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.bar-chart-rows {
+  border-top: 1px solid var(--border);
+}
+
+.bar-chart-row {
+  display: flex;
+  align-items: center;
+  border-bottom: 1px solid var(--border);
+  padding: 6px 0;
+}
+
+.bar-chart-artist-image {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.bar-chart-artist-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-h);
+  text-decoration: none;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bar-chart-artist-name:hover {
+  text-decoration: underline;
+}
+
+.bar-chart-track {
+  flex: 1;
+  position: relative;
+  height: 36px;
+}
+
+.bar-chart-bar {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  height: 22px;
+  border-radius: 4px;
+  opacity: 0.88;
+  transition: opacity 0.15s;
+}
+
+.bar-chart-bar:hover {
+  opacity: 1;
+}
+
+.bar-chart-bar-active {
+  border-radius: 4px 12px 12px 4px;
+}
+
+@media (max-width: 600px) {
+  .bar-chart-label-col {
+    width: 110px;
+    padding-right: 8px;
+  }
+
+  .bar-chart-year-mark {
+    font-size: 10px;
+  }
 }
 
 /* Artist top tracks page */
