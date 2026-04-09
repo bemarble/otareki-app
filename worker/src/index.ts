@@ -89,7 +89,8 @@ async function handleSearch(
   const searchUrl = new URL('https://api.spotify.com/v1/search')
   searchUrl.searchParams.set('q', q)
   searchUrl.searchParams.set('type', 'artist')
-  searchUrl.searchParams.set('limit', '5')
+  searchUrl.searchParams.set('limit', '10')
+  searchUrl.searchParams.set('market', 'JP')
 
   const res = await fetch(searchUrl.toString(), {
     headers: {
