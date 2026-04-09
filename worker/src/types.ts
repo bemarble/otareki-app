@@ -39,28 +39,28 @@ export type SearchResult = {
   image: string
 }
 
-// Spotify Top Tracks API のうち、トラック情報
-export type SpotifyTrack = {
+// Spotify Albums API のうち、アルバム情報
+export type SpotifyAlbum = {
   id: string
   name: string
-  album: {
-    images?: SpotifySearchArtistImage[]
-  }
+  images?: SpotifySearchArtistImage[]
+  release_date?: string
   external_urls?: {
     spotify?: string
   }
 }
 
-// Spotify Top Tracks API レスポンス
-export type SpotifyTopTracksResponse = {
-  tracks: SpotifyTrack[]
+// Spotify Albums API レスポンス
+export type SpotifyAlbumsResponse = {
+  items: SpotifyAlbum[]
 }
 
-// フロントエンドに返す代表曲情報
-export type TopTrackResult = {
+// フロントエンドに返すアルバム情報
+export type AlbumResult = {
   id: string
   name: string
   image: string
   url: string
+  releaseDate: string
 }
 
