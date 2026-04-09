@@ -2,7 +2,11 @@ name = "otareki-worker"
 main = "src/index.ts"
 compatibility_date = "2025-01-01"
 
-[vars]
-SPOTIFY_CLIENT_ID = ""
-SPOTIFY_CLIENT_SECRET = ""
+# フロントエンドのビルド成果物を静的アセットとして配信
+[assets]
+directory = "../frontend/dist"
+binding = "ASSETS"
+
+# SPOTIFY_CLIENT_ID / SPOTIFY_CLIENT_SECRET は
+# `wrangler secret put` で登録すること（平文で書かないこと）
 

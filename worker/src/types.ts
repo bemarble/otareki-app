@@ -2,6 +2,8 @@
 export interface Env {
   SPOTIFY_CLIENT_ID: string
   SPOTIFY_CLIENT_SECRET: string
+  /** wrangler.toml [assets] binding で注入される静的アセットフェッチャー */
+  ASSETS: Fetcher
 }
 
 // Spotify のアクセストークン取得レスポンス

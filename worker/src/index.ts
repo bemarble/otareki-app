@@ -35,7 +35,13 @@ export default {
       return handleArtistTop(request, env, ctx)
     }
 
-    return new Response('Not found', { status: 404 })
+    // 静的アセット配信（React Router の SPA ルーティングに対応）
+    const assetResponse = await env.ASSETS.fetch(request)
+    if (assetResponse.status === 404) {
+      // ファイルが存在しないパス（/create, /t/:data など）は index.html を返す
+      return env.ASSETS.fetch(new Request(new URL('/index.html', request.url).toString()))
+    }
+    return assetResponse
   },
 } satisfies ExportedHandler<Env>
 
