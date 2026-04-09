@@ -1,5 +1,7 @@
 /// <reference types="@cloudflare/workers-types" />
 
+import { decompressFromEncodedURIComponent } from 'lz-string'
+
 // 型定義は src/types.ts に集約
 import {
   type Env,
@@ -9,6 +11,10 @@ import {
   type SpotifyTokenResponse,
   type TopTrackResult,
 } from './types'
+
+// ボット判定パターン（OGP クローラーを対象とする）
+const BOT_UA_RE =
+  /bot|crawler|spider|facebookexternalhit|twitterbot|slackbot|discordbot|whatsapp|telegram|line\//i
 
 // Spotify トークン / 検索結果のキャッシュ用キー・TTL
 const TOKEN_CACHE_KEY = 'spotify-token'
@@ -33,6 +39,15 @@ export default {
 
     if (url.pathname === '/api/artist-top') {
       return handleArtistTop(request, env, ctx)
+    }
+
+    // タイムラインページ: ボットには OGP を動的注入した HTML を返す
+    const timelineMatch = url.pathname.match(/^\/t\/(.+)$/)
+    if (timelineMatch) {
+      const ua = request.headers.get('User-Agent') ?? ''
+      if (BOT_UA_RE.test(ua)) {
+        return handleTimelineOgp(request, env, timelineMatch[1])
+      }
     }
 
     // 静的アセット配信（React Router の SPA ルーティングに対応）
@@ -255,5 +270,92 @@ export function extractImageHash(url: string): string {
   if (!url) return ''
   const parts = url.split('/')
   return parts[parts.length - 1] ?? ''
+}
+
+// タイムライン URL データを OGP 生成用に最小限デコードする
+function decodeTimelineForOgp(encoded: string): { username: string; artistNames: string[] } {
+  try {
+    const json = decompressFromEncodedURIComponent(encoded)
+    if (!json) return { username: '', artistNames: [] }
+    const raw = JSON.parse(json) as unknown
+
+    // 旧フォーマット（配列）との互換
+    if (Array.isArray(raw)) {
+      return {
+        username: '',
+        artistNames: (raw as [string, ...unknown[]][]).map((e) => String(e[0])),
+      }
+    }
+
+    const payload = raw as { u?: string; e?: [string, ...unknown[]][] }
+    return {
+      username: payload.u ?? '',
+      artistNames: (payload.e ?? []).map((e) => String(e[0])),
+    }
+  } catch {
+    return { username: '', artistNames: [] }
+  }
+}
+
+// HTML 属性値をエスケープする
+function escapeHtmlAttr(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+}
+
+// ボット向けにタイムラインページの OGP を動的注入して返す
+async function handleTimelineOgp(
+  request: Request,
+  env: Env,
+  encoded: string,
+): Promise<Response> {
+  const { username, artistNames } = decodeTimelineForOgp(encoded)
+
+  const title = username
+    ? `${username}のオタレキ — 推し遍歴タイムライン`
+    : '推し遍歴タイムライン | オタレキ'
+  const description =
+    artistNames.length > 0
+      ? `${artistNames.slice(0, 5).join('・')} などの推し遍歴タイムラインです。`
+      : '推し遍歴をタイムラインにまとめました。'
+  const pageUrl = request.url
+
+  const indexRes = await env.ASSETS.fetch(
+    new Request(new URL('/index.html', request.url).toString()),
+  )
+  let html = await indexRes.text()
+
+  // 静的に書かれた OGP 値を動的な値で置換する
+  html = html
+    .replace(
+      /(<meta property="og:title" content=")[^"]*(")/,
+      `$1${escapeHtmlAttr(title)}$2`,
+    )
+    .replace(
+      /(<meta property="og:description" content=")[^"]*(")/,
+      `$1${escapeHtmlAttr(description)}$2`,
+    )
+    .replace(
+      /(<meta property="og:url" content=")[^"]*(")/,
+      `$1${escapeHtmlAttr(pageUrl)}$2`,
+    )
+    .replace(
+      /(<meta name="twitter:title" content=")[^"]*(")/,
+      `$1${escapeHtmlAttr(title)}$2`,
+    )
+    .replace(
+      /(<meta name="twitter:description" content=")[^"]*(")/,
+      `$1${escapeHtmlAttr(description)}$2`,
+    )
+    .replace(
+      /(<link rel="canonical" href=")[^"]*(")/,
+      `$1${escapeHtmlAttr(pageUrl)}$2`,
+    )
+
+  return new Response(html, {
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'public, max-age=3600',
+    },
+  })
 }
 
