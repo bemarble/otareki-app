@@ -479,7 +479,7 @@ function CreatePage() {
             <span className="username-label">ユーザー名（任意）</span>
             <input
               className="text-input"
-              placeholder="例: みなみ"
+              placeholder="例: オタク"
               value={username}
               maxLength={30}
               onChange={(e) => setUsername(e.target.value)}
