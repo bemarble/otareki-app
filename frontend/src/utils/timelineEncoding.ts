@@ -8,32 +8,17 @@ export type TimelineEntry = {
   endYear: string
 }
 
-type EncodedItem = [string, string, string, string]
-
-export function encodeTimeline(entries: TimelineEntry[]): string {
-  const data: EncodedItem[] = entries.map((e) => [
-    e.name,
-    e.imageHash,
-    e.startYear,
-    e.endYear,
-  ])
-  const json = JSON.stringify(data)
-  return compressToEncodedURIComponent(json)
+export type TimelineData = {
+  username: string
+  entries: TimelineEntry[]
 }
 
-export function decodeTimeline(encoded: string): TimelineEntry[] {
-  if (!encoded) return []
+// 旧フォーマット: EncodedItem[] (配列)
+// 新フォーマット: { u?: string, e: EncodedItem[] } (オブジェクト)
+type EncodedItem = [string, string, string, string]
+type EncodedPayload = { u?: string; e: EncodedItem[] }
 
-  const json = decompressFromEncodedURIComponent(encoded)
-  if (!json) return []
-
-  let raw: EncodedItem[]
-  try {
-    raw = JSON.parse(json) as EncodedItem[]
-  } catch {
-    return []
-  }
-
+function mapItems(raw: EncodedItem[]): TimelineEntry[] {
   return raw.map(([name, imageHash, startYear, endYear], index) => ({
     id: `${name}-${index}`,
     name,
@@ -43,3 +28,35 @@ export function decodeTimeline(encoded: string): TimelineEntry[] {
   }))
 }
 
+export function encodeTimeline(data: TimelineData): string {
+  const payload: EncodedPayload = {
+    e: data.entries.map((e) => [e.name, e.imageHash, e.startYear, e.endYear]),
+  }
+  if (data.username) payload.u = data.username
+  return compressToEncodedURIComponent(JSON.stringify(payload))
+}
+
+export function decodeTimeline(encoded: string): TimelineData {
+  if (!encoded) return { username: '', entries: [] }
+
+  const json = decompressFromEncodedURIComponent(encoded)
+  if (!json) return { username: '', entries: [] }
+
+  let raw: unknown
+  try {
+    raw = JSON.parse(json)
+  } catch {
+    return { username: '', entries: [] }
+  }
+
+  // 旧フォーマット（配列）との後方互換
+  if (Array.isArray(raw)) {
+    return { username: '', entries: mapItems(raw as EncodedItem[]) }
+  }
+
+  const payload = raw as EncodedPayload
+  return {
+    username: payload.u ?? '',
+    entries: mapItems(payload.e ?? []),
+  }
+}
