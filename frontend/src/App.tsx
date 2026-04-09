@@ -647,13 +647,7 @@ function TimelinePage() {
                         className="bar-chart-artist-image"
                       />
                     )}
-                    <Link
-                      className="bar-chart-artist-name"
-                      to={`/artist/${encodeURIComponent(item.id)}`}
-                      state={{ name: item.name }}
-                    >
-                      {item.name}
-                    </Link>
+                    <span className="bar-chart-artist-name">{item.name}</span>
                   </div>
                   <div className="bar-chart-track">
                     <div
@@ -688,7 +682,7 @@ function TimelinePage() {
           onClick={() => void handleDownloadImage()}
           disabled={isCapturing}
         >
-          {isCapturing ? '画像生成中…' : '画像を保存する（1080x1350）'}
+          {isCapturing ? '画像生成中…' : '画像を保存する'}
         </button>
         <button
           type="button"
