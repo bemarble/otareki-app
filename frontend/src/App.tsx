@@ -6,7 +6,7 @@ import {
   useParams,
   useSearchParams,
 } from 'react-router-dom'
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useId, useMemo, useRef, useState } from 'react'
 import './App.css'
 import {
   type TimelineEntry,
@@ -45,11 +45,42 @@ const BAR_COLORS = [
   '#f97316',
 ]
 
+function OtarekiIcon({ size = 24 }: { size?: number }) {
+  const uid = useId()
+  const gId = `otareki-bg-${uid}`
+  return (
+    <svg
+      width={size}
+      height={size}
+      viewBox="0 0 100 100"
+      xmlns="http://www.w3.org/2000/svg"
+      aria-hidden="true"
+      style={{ flexShrink: 0 }}
+    >
+      <defs>
+        <linearGradient id={gId} x1="0%" y1="0%" x2="100%" y2="100%">
+          <stop offset="0%" stopColor="#c084fc" />
+          <stop offset="100%" stopColor="#7c3aed" />
+        </linearGradient>
+      </defs>
+      <rect width="100" height="100" rx="22" fill={`url(#${gId})`} />
+      <path
+        d="M50,18 L54,28 L64,28 L56,35 L59,45 L50,39 L41,45 L44,35 L36,28 L47,28 Z"
+        fill="white"
+      />
+      <rect x="18" y="58" width="56" height="6" rx="3" fill="white" opacity="0.95" />
+      <rect x="18" y="68" width="37" height="6" rx="3" fill="white" opacity="0.80" />
+      <rect x="18" y="78" width="47" height="6" rx="3" fill="white" opacity="0.88" />
+    </svg>
+  )
+}
+
 function Layout({ children }: { children: React.ReactNode }) {
   return (
     <div className="app-shell">
       <header className="app-header">
         <Link to="/" className="logo">
+          <OtarekiIcon size={28} />
           オタレキ
         </Link>
         <nav className="nav-links">
@@ -497,6 +528,7 @@ function TimelinePage() {
     <Layout>
       <section className="timeline-view" ref={timelineRef}>
         <h1 className="timeline-view-title">
+          <OtarekiIcon size={32} />
           {username ? `${username}のオタレキ` : 'オタレキ'}
         </h1>
         <div className="bar-chart">
