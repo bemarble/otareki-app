@@ -21,11 +21,12 @@ type ArtistResult = {
   image: string
 }
 
-type TopTrack = {
+type Album = {
   id: string
   name: string
   image: string
   url: string
+  releaseDate: string
 }
 
 const MAX_ARTISTS = 10
@@ -226,6 +227,7 @@ function CreatePage() {
   const navigate = useNavigate()
 
   const canAddMore = timeline.length < MAX_ARTISTS
+  const timelineEditRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const encoded = searchParams.get('data')
@@ -269,6 +271,9 @@ function CreatePage() {
         endYear: '',
       },
     ])
+    setTimeout(() => {
+      timelineEditRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }, 0)
   }
 
   function updateYear(id: string, field: 'startYear' | 'endYear', value: string) {
@@ -375,7 +380,7 @@ function CreatePage() {
           <p className="muted-text">最大 {MAX_ARTISTS} アーティストまで追加できます。</p>
         </div>
 
-        <div className="panel">
+        <div className="panel" ref={timelineEditRef}>
           <h2>2. タイムライン編集</h2>
           <p className="panel-description">
             各アーティストの推し始め・推し終わりの年をスライダーで設定します。
@@ -644,7 +649,6 @@ function TimelinePage() {
                     <Link
                       className="bar-chart-artist-name"
                       to={`/artist/${encodeURIComponent(item.name)}`}
-                      state={{ name: item.name }}
                     >
                       {item.name}
                     </Link>
@@ -699,66 +703,76 @@ function TimelinePage() {
 
 function ArtistTopTracksPage() {
   const { name } = useParams<{ name: string }>()
-  const decodedName = name ? decodeURIComponent(name) : ''
-  const [tracks, setTracks] = useState<TopTrack[]>([])
+  const artistName = name ? decodeURIComponent(name) : ''
+  const [albums, setAlbums] = useState<Album[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
-    if (!decodedName) return
+    if (!artistName) return
+    const controller = new AbortController()
+    setLoading(true)
+    setError(null)
     ;(async () => {
-      setLoading(true)
-      setError(null)
       try {
-        const params = new URLSearchParams({ q: decodedName })
-        const res = await fetch(`/api/artist-top?${params.toString()}`)
+        const params = new URLSearchParams({ q: artistName })
+        const res = await fetch(`/api/artist-top?${params.toString()}`, {
+          signal: controller.signal,
+        })
         if (!res.ok) {
-          throw new Error('代表曲の取得に失敗しました')
+          throw new Error('アルバムの取得に失敗しました')
         }
-        const data = (await res.json()) as TopTrack[]
-        setTracks(data)
+        const data = (await res.json()) as Album[]
+        setAlbums(data)
       } catch (e) {
+        if (e instanceof Error && e.name === 'AbortError') return
         setError(
-          e instanceof Error ? e.message : '代表曲の取得中にエラーが発生しました',
+          e instanceof Error ? e.message : 'アルバムの取得中にエラーが発生しました',
         )
       } finally {
         setLoading(false)
       }
     })().catch(() => {})
-  }, [decodedName])
+    return () => controller.abort()
+  }, [artistName])
 
   return (
     <Layout>
       <section className="timeline-view">
         <h1 className="timeline-view-title">
-          {decodedName ? `${decodedName} の代表曲` : '代表曲'}
+          {artistName ? `${artistName} のアルバム` : 'アルバム'}
         </h1>
         {loading && <p className="muted-text">読み込み中です…</p>}
         {error && <p className="error-text">{error}</p>}
-        {!loading && !error && tracks.length === 0 && (
-          <p className="muted-text">代表曲が見つかりませんでした。</p>
+        {!loading && !error && albums.length === 0 && (
+          <p className="muted-text">アルバムが見つかりませんでした。</p>
         )}
-        {!loading && !error && tracks.length > 0 && (
+        {!loading && !error && albums.length > 0 && (
           <ul className="top-tracks-list">
-            {tracks.map((track) => (
-              <li key={track.id} className="top-tracks-item">
+            {albums.map((album) => (
+              <li key={album.id} className="top-tracks-item">
                 <div className="top-tracks-content">
-                  {track.image && (
+                  {album.image && (
                     <img
-                      src={`https://i.scdn.co/image/${track.image}`}
-                      alt={track.name}
+                      src={`https://i.scdn.co/image/${album.image}`}
+                      alt={album.name}
                       className="top-tracks-image"
                     />
                   )}
                   <div className="top-tracks-meta">
-                    <div className="top-tracks-name">{track.name}</div>
+                    <div>
+                      <div className="top-tracks-name">{album.name}</div>
+                      {album.releaseDate && (
+                        <div className="muted-text">{album.releaseDate}</div>
+                      )}
+                    </div>
                     <a
-                      href={track.url}
+                      href={album.url}
                       target="_blank"
                       rel="noreferrer"
                       className="secondary-button top-tracks-link"
                     >
-                      Spotifyで再生
+                      Spotifyで聴く
                     </a>
                   </div>
                 </div>

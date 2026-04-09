@@ -13,14 +13,15 @@ export type TimelineData = {
   entries: TimelineEntry[]
 }
 
-// 旧フォーマット: EncodedItem[] (配列)
+// 旧フォーマット: EncodedItem[] (配列) — [name, imageHash, startYear, endYear]
 // 新フォーマット: { u?: string, e: EncodedItem[] } (オブジェクト)
-type EncodedItem = [string, string, string, string]
+// v2: 5要素目に Spotify アーティスト ID を追加
+type EncodedItem = [string, string, string, string, string?]
 type EncodedPayload = { u?: string; e: EncodedItem[] }
 
 function mapItems(raw: EncodedItem[]): TimelineEntry[] {
-  return raw.map(([name, imageHash, startYear, endYear], index) => ({
-    id: `${name}-${index}`,
+  return raw.map(([name, imageHash, startYear, endYear, spotifyId], index) => ({
+    id: spotifyId ?? `${name}-${index}`,
     name,
     imageHash,
     startYear,
@@ -30,7 +31,7 @@ function mapItems(raw: EncodedItem[]): TimelineEntry[] {
 
 export function encodeTimeline(data: TimelineData): string {
   const payload: EncodedPayload = {
-    e: data.entries.map((e) => [e.name, e.imageHash, e.startYear, e.endYear]),
+    e: data.entries.map((e) => [e.name, e.imageHash, e.startYear, e.endYear, e.id]),
   }
   if (data.username) payload.u = data.username
   return compressToEncodedURIComponent(JSON.stringify(payload))

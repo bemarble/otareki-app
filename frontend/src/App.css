@@ -607,10 +607,11 @@
 }
 
 .bar-chart-label-col {
-  width: 160px;
+  width: 200px;
   flex-shrink: 0;
   display: flex;
   align-items: center;
+  align-self: center;
   gap: 8px;
   padding-right: 14px;
   box-sizing: border-box;
@@ -639,7 +640,7 @@
 
 .bar-chart-row {
   display: flex;
-  align-items: center;
+  align-items: stretch;
   border-bottom: 1px solid var(--border);
   padding: 6px 0;
 }
@@ -658,9 +659,8 @@
   color: var(--text-h);
   text-decoration: none;
   min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  overflow-wrap: break-word;
+  word-break: break-all;
 }
 
 .bar-chart-artist-name:hover {
@@ -670,7 +670,9 @@
 .bar-chart-track {
   flex: 1;
   position: relative;
-  height: 36px;
+  min-height: 36px;
+  display: flex;
+  align-items: center;
 }
 
 .bar-chart-bar {
@@ -693,7 +695,7 @@
 
 @media (max-width: 600px) {
   .bar-chart-label-col {
-    width: 110px;
+    width: 130px;
     padding-right: 8px;
   }
 
@@ -749,4 +751,6 @@
 .top-tracks-link {
   font-size: 12px;
   padding-inline: 10px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }

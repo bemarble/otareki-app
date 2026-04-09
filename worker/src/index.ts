@@ -1,14 +1,20 @@
 /// <reference types="@cloudflare/workers-types" />
 
+import { decompressFromEncodedURIComponent } from 'lz-string'
+
 // 型定義は src/types.ts に集約
 import {
+  type AlbumResult,
   type Env,
   type SearchResult,
+  type SpotifyAlbumsResponse,
   type SpotifySearchResponse,
-  type SpotifyTopTracksResponse,
   type SpotifyTokenResponse,
-  type TopTrackResult,
 } from './types'
+
+// ボット判定パターン（OGP クローラーを対象とする）
+const BOT_UA_RE =
+  /bot|crawler|spider|facebookexternalhit|twitterbot|slackbot|discordbot|whatsapp|telegram|line\//i
 
 // Spotify トークン / 検索結果のキャッシュ用キー・TTL
 const TOKEN_CACHE_KEY = 'spotify-token'
@@ -33,6 +39,15 @@ export default {
 
     if (url.pathname === '/api/artist-top') {
       return handleArtistTop(request, env, ctx)
+    }
+
+    // タイムラインページ: ボットには OGP を動的注入した HTML を返す
+    const timelineMatch = url.pathname.match(/^\/t\/(.+)$/)
+    if (timelineMatch) {
+      const ua = request.headers.get('User-Agent') ?? ''
+      if (BOT_UA_RE.test(ua)) {
+        return handleTimelineOgp(request, env, timelineMatch[1])
+      }
     }
 
     // 静的アセット配信（React Router の SPA ルーティングに対応）
@@ -74,7 +89,8 @@ async function handleSearch(
   const searchUrl = new URL('https://api.spotify.com/v1/search')
   searchUrl.searchParams.set('q', q)
   searchUrl.searchParams.set('type', 'artist')
-  searchUrl.searchParams.set('limit', '5')
+  searchUrl.searchParams.set('limit', '10')
+  searchUrl.searchParams.set('market', 'JP')
 
   const res = await fetch(searchUrl.toString(), {
     headers: {
@@ -107,7 +123,7 @@ async function handleSearch(
   return response
 }
 
-// アーティスト名から代表曲（Top Tracks）を取得する
+// アーティスト名 → /v1/search で artist.id を取得 → /v1/artists/{id}/albums でアルバム一覧を返す
 async function handleArtistTop(
   request: Request,
   env: Env,
@@ -121,79 +137,74 @@ async function handleArtistTop(
     })
   }
 
-  // クエリを小文字に正規化した URL をキャッシュキーにする
-  const cacheUrl = new URL(request.url)
-  cacheUrl.searchParams.set('q', q.toLowerCase())
+  // クエリを小文字に正規化した文字列をキャッシュキーにする
+  const cacheKey = `https://artist-albums-cache/${q.toLowerCase()}`
   const cache = getDefaultCache()
 
-  const cached = await cache.match(cacheUrl.toString())
+  const cached = await cache.match(cacheKey)
   if (cached) {
     return cached
   }
 
   const token = await getSpotifyToken(env)
 
-  // 1. アーティスト名からIDを取得（/v1/search）
+  // 1. /v1/search でアーティスト名から artist.id を取得
   const searchUrl = new URL('https://api.spotify.com/v1/search')
   searchUrl.searchParams.set('q', q)
   searchUrl.searchParams.set('type', 'artist')
   searchUrl.searchParams.set('limit', '1')
+  searchUrl.searchParams.set('market', 'JP')
 
   const searchRes = await fetch(searchUrl.toString(), {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+    headers: { Authorization: `Bearer ${token}` },
   })
 
   if (!searchRes.ok) {
-    console.error('Spotify artist search error', searchRes.status, await searchRes.text())
-    return new Response('Spotify artist search failed', { status: 502 })
+    console.error('Spotify search error', searchRes.status, await searchRes.text())
+    return new Response('Spotify search failed', { status: 502 })
   }
 
   const searchData = (await searchRes.json()) as SpotifySearchResponse
   const artist = searchData.artists?.items?.[0]
   if (!artist) {
-    // アーティストが見つからない場合は空配列を返す
-    return jsonResponse([], {
-      'Cache-Control': 'public, max-age=60',
-    })
+    return jsonResponse([], { 'Cache-Control': 'public, max-age=60' })
   }
 
-  // 2. アーティストIDからTop Tracksを取得（/v1/artists/{id}/top-tracks）
-  const topUrl = new URL(
-    `https://api.spotify.com/v1/artists/${encodeURIComponent(artist.id)}/top-tracks`,
+  // 2. /v1/artists/{id}/albums でアルバム一覧を取得
+  const albumsUrl = new URL(
+    `https://api.spotify.com/v1/artists/${encodeURIComponent(artist.id)}/albums`,
   )
-  topUrl.searchParams.set('market', 'JP')
-  topUrl.searchParams.set('limit', '10')
+  albumsUrl.searchParams.set('include_groups', 'album,single')
+  albumsUrl.searchParams.set('market', 'JP')
+  albumsUrl.searchParams.set('limit', '10')
 
-  const topRes = await fetch(topUrl.toString(), {
-    headers: {
-      Authorization: `Bearer ${token}`,
-    },
+  const albumsRes = await fetch(albumsUrl.toString(), {
+    headers: { Authorization: `Bearer ${token}` },
   })
 
-  if (!topRes.ok) {
-    console.error('Spotify top tracks error', topRes.status, topUrl.pathname, await topRes.text())
-    return new Response('Spotify top tracks failed', { status: 502 })
+  if (!albumsRes.ok) {
+    console.error('Spotify albums error', albumsRes.status, albumsUrl.pathname, await albumsRes.text())
+    return new Response('Spotify albums failed', { status: 502 })
   }
 
-  const topData = (await topRes.json()) as SpotifyTopTracksResponse
-  const tracks = topData.tracks ?? []
+  const albumsData = (await albumsRes.json()) as SpotifyAlbumsResponse
+  const albums = albumsData.items ?? []
 
-  const body: TopTrackResult[] = tracks.map((track) => ({
-    id: track.id,
-    name: track.name,
-    image: extractImageHash(track.album.images?.[0]?.url ?? ''),
+  const body: AlbumResult[] = albums.map((album) => ({
+    id: album.id,
+    name: album.name,
+    image: extractImageHash(album.images?.[0]?.url ?? ''),
     url:
-      track.external_urls?.spotify ??
-      `https://open.spotify.com/track/${encodeURIComponent(track.id)}`,
+      album.external_urls?.spotify ??
+      `https://open.spotify.com/album/${encodeURIComponent(album.id)}`,
+    releaseDate: album.release_date ?? '',
   }))
 
   const response = jsonResponse(body, {
     'Cache-Control': `public, max-age=${SEARCH_TTL_SECONDS}`,
   })
 
-  ctx.waitUntil(cache.put(cacheUrl.toString(), response.clone()))
+  ctx.waitUntil(cache.put(cacheKey, response.clone()))
 
   return response
 }
@@ -255,5 +266,92 @@ export function extractImageHash(url: string): string {
   if (!url) return ''
   const parts = url.split('/')
   return parts[parts.length - 1] ?? ''
+}
+
+// タイムライン URL データを OGP 生成用に最小限デコードする
+function decodeTimelineForOgp(encoded: string): { username: string; artistNames: string[] } {
+  try {
+    const json = decompressFromEncodedURIComponent(encoded)
+    if (!json) return { username: '', artistNames: [] }
+    const raw = JSON.parse(json) as unknown
+
+    // 旧フォーマット（配列）との互換
+    if (Array.isArray(raw)) {
+      return {
+        username: '',
+        artistNames: (raw as [string, ...unknown[]][]).map((e) => String(e[0])),
+      }
+    }
+
+    const payload = raw as { u?: string; e?: [string, ...unknown[]][] }
+    return {
+      username: payload.u ?? '',
+      artistNames: (payload.e ?? []).map((e) => String(e[0])),
+    }
+  } catch {
+    return { username: '', artistNames: [] }
+  }
+}
+
+// HTML 属性値をエスケープする
+function escapeHtmlAttr(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;')
+}
+
+// ボット向けにタイムラインページの OGP を動的注入して返す
+async function handleTimelineOgp(
+  request: Request,
+  env: Env,
+  encoded: string,
+): Promise<Response> {
+  const { username, artistNames } = decodeTimelineForOgp(encoded)
+
+  const title = username
+    ? `${username}のオタレキ — 推し遍歴タイムライン`
+    : '推し遍歴タイムライン | オタレキ'
+  const description =
+    artistNames.length > 0
+      ? `${artistNames.slice(0, 5).join('・')} などの推し遍歴タイムラインです。`
+      : '推し遍歴をタイムラインにまとめました。'
+  const pageUrl = request.url
+
+  const indexRes = await env.ASSETS.fetch(
+    new Request(new URL('/index.html', request.url).toString()),
+  )
+  let html = await indexRes.text()
+
+  // 静的に書かれた OGP 値を動的な値で置換する
+  html = html
+    .replace(
+      /(<meta property="og:title" content=")[^"]*(")/,
+      `$1${escapeHtmlAttr(title)}$2`,
+    )
+    .replace(
+      /(<meta property="og:description" content=")[^"]*(")/,
+      `$1${escapeHtmlAttr(description)}$2`,
+    )
+    .replace(
+      /(<meta property="og:url" content=")[^"]*(")/,
+      `$1${escapeHtmlAttr(pageUrl)}$2`,
+    )
+    .replace(
+      /(<meta name="twitter:title" content=")[^"]*(")/,
+      `$1${escapeHtmlAttr(title)}$2`,
+    )
+    .replace(
+      /(<meta name="twitter:description" content=")[^"]*(")/,
+      `$1${escapeHtmlAttr(description)}$2`,
+    )
+    .replace(
+      /(<link rel="canonical" href=")[^"]*(")/,
+      `$1${escapeHtmlAttr(pageUrl)}$2`,
+    )
+
+  return new Response(html, {
+    headers: {
+      'Content-Type': 'text/html; charset=utf-8',
+      'Cache-Control': 'public, max-age=3600',
+    },
+  })
 }
 
