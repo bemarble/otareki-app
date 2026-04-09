@@ -1,0 +1,13 @@
+# Node / build artifacts
+node_modules
+dist
+
+# Local env / secrets
+.env
+.env.*
+worker/.dev.vars
+worker/.env
+worker/.env.*
+worker/.wrangler/*
+
+settings.local.json
