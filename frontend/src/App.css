@@ -751,4 +751,6 @@
 .top-tracks-link {
   font-size: 12px;
   padding-inline: 10px;
+  flex-shrink: 0;
+  white-space: nowrap;
 }
