@@ -226,6 +226,7 @@ function CreatePage() {
   const navigate = useNavigate()
 
   const canAddMore = timeline.length < MAX_ARTISTS
+  const timelineEditRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     const encoded = searchParams.get('data')
@@ -269,6 +270,9 @@ function CreatePage() {
         endYear: '',
       },
     ])
+    setTimeout(() => {
+      timelineEditRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }, 0)
   }
 
   function updateYear(id: string, field: 'startYear' | 'endYear', value: string) {
@@ -375,7 +379,7 @@ function CreatePage() {
           <p className="muted-text">最大 {MAX_ARTISTS} アーティストまで追加できます。</p>
         </div>
 
-        <div className="panel">
+        <div className="panel" ref={timelineEditRef}>
           <h2>2. タイムライン編集</h2>
           <p className="panel-description">
             各アーティストの推し始め・推し終わりの年をスライダーで設定します。
